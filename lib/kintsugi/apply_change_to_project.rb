@@ -652,6 +652,8 @@ module Kintsugi
         add_file_reference(component, change, change_path)
       when "PBXGroup"
         add_group(component, change, change_path)
+      when "PBXFileSystemSynchronizedRootGroup"
+        add_file_system_synchronized_root_group(component, change, change_path)
       when "PBXContainerItemProxy"
         add_container_item_proxy(component, change, change_path)
       when "PBXTargetDependency"
@@ -1006,12 +1008,35 @@ module Kintsugi
         new_group = containing_component[:project_ref].project.new(Xcodeproj::Project::PBXGroup)
         containing_component[:product_group] = new_group
         add_attributes_to_component(new_group, change, change_path)
-      when Xcodeproj::Project::PBXGroup
+      when Xcodeproj::Project::PBXGroup, Xcodeproj::Project::PBXFileSystemSynchronizedRootGroup
         # Adding groups to groups is handled by another part of the code.
       else
         raise MergeError, "Trying to add group to an unsupported component type " \
                           "#{containing_component.isa}. Change is: #{change}. Change path: " \
                           "#{change_path}"
+      end
+    end
+
+    def add_file_system_synchronized_root_group(containing_component, change, change_path)
+      case containing_component
+      when Xcodeproj::Project::PBXNativeTarget
+        group = containing_component.project.new(Xcodeproj::Project::PBXFileSystemSynchronizedRootGroup)
+        containing_component.file_system_synchronized_groups << group
+        add_attributes_to_component(group, change, change_path)
+      when Xcodeproj::Project::PBXGroup, Xcodeproj::Project::PBXFileSystemSynchronizedRootGroup
+        # Adding file system synchronized root groups to groups is handled by another part of
+        # the code.
+      else
+        if containing_component.respond_to?(:file_system_synchronized_groups)
+          group = containing_component.project.new(Xcodeproj::Project::PBXFileSystemSynchronizedRootGroup)
+          containing_component.file_system_synchronized_groups << group
+          add_attributes_to_component(group, change, change_path)
+          return
+        end
+
+        raise MergeError, "Trying to add file system synchronized root group to an unsupported " \
+                          "component type #{containing_component.isa}. Change is: #{change}. " \
+                          "Change path: #{change_path}"
       end
     end
 
